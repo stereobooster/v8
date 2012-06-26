@@ -78,7 +78,7 @@ LIBRARY_FLAGS = {
                        'LIVE_OBJECT_LIST', 'OBJECT_PRINT'],
     }
   },
-  'gcc': {
+  'crossmingw': {
     'all': {
       'CCFLAGS':      ['$DIALECTFLAGS', '$WARNINGFLAGS'],
       'CXXFLAGS':     ['-fno-rtti', '-fno-exceptions'],
@@ -299,7 +299,7 @@ LIBRARY_FLAGS = {
 
 
 V8_EXTRA_FLAGS = {
-  'gcc': {
+  'crossmingw': {
     'all': {
       'WARNINGFLAGS': ['-Wall',
                        '-Werror',
@@ -310,8 +310,7 @@ V8_EXTRA_FLAGS = {
     },
     'os:win32': {
       'WARNINGFLAGS': ['-pedantic',
-                       '-Wno-long-long',
-                       '-Wno-pedantic-ms-format'],
+                       '-Wno-long-long'],
       'library:shared': {
         'LIBS': ['winmm', 'ws2_32']
       }
@@ -364,7 +363,7 @@ V8_EXTRA_FLAGS = {
 
 
 MKSNAPSHOT_EXTRA_FLAGS = {
-  'gcc': {
+  'crossmingw': {
     'os:linux': {
       'LIBS': ['pthread'],
     },
@@ -403,7 +402,7 @@ MKSNAPSHOT_EXTRA_FLAGS = {
 
 
 DTOA_EXTRA_FLAGS = {
-  'gcc': {
+  'crossmingw': {
     'all': {
       'WARNINGFLAGS': ['-Werror', '-Wno-uninitialized'],
       'CCFLAGS': GCC_DTOA_EXTRA_CCFLAGS
@@ -424,7 +423,7 @@ CCTEST_EXTRA_FLAGS = {
       'CPPDEFINES': ['USING_V8_SHARED']
     },
   },
-  'gcc': {
+  'crossmingw': {
     'all': {
       'LIBPATH':      [abspath('.')],
       'CCFLAGS':      ['$DIALECTFLAGS', '$WARNINGFLAGS'],
@@ -481,7 +480,7 @@ SAMPLE_FLAGS = {
       'CPPDEFINES': ['USING_V8_SHARED']
     },
   },
-  'gcc': {
+  'crossmingw': {
     'all': {
       'LIBPATH':      ['.'],
       'CCFLAGS':      ['$DIALECTFLAGS', '$WARNINGFLAGS'],
@@ -673,7 +672,7 @@ PREPARSER_FLAGS = {
       'CPPDEFINES': ['USING_V8_SHARED']
     },
   },
-  'gcc': {
+  'crossmingw': {
     'all': {
       'LIBPATH':      ['.'],
       'CCFLAGS':      ['$DIALECTFLAGS', '$WARNINGFLAGS'],
@@ -835,7 +834,7 @@ D8_FLAGS = {
       'LIBPATH': ['.']
     },
   },
-  'gcc': {
+  'crossmingw': {
     'all': {
       'CCFLAGS': ['$DIALECTFLAGS', '$WARNINGFLAGS'],
       'CXXFLAGS': ['-fno-rtti', '-fno-exceptions'],
@@ -958,6 +957,8 @@ def GuessToolchain(env):
   tools = env['TOOLS']
   if 'gcc' in tools:
     return 'gcc'
+  elif 'crossmingw' in tools:
+    return 'crossmingw'
   elif 'msvc' in tools:
     return 'msvc'
   else:
@@ -967,7 +968,7 @@ def GuessToolchain(env):
 def GuessVisibility(env):
   os = env['os']
   toolchain = env['toolchain'];
-  if (os == 'win32' or os == 'cygwin') and toolchain == 'gcc':
+  if (os == 'win32' or os == 'cygwin') and (toolchain == 'gcc' or toolchain == 'crossmingw'):
     # MinGW / Cygwin can't do it.
     return 'default'
   elif os == 'solaris':
@@ -981,6 +982,8 @@ def GuessStrictAliasing(env):
   # See http://code.google.com/p/v8/issues/detail?id=884
   # It can be worked around by disabling strict aliasing.
   toolchain = env['toolchain'];
+  if toolchain == 'crossmingw':
+    return 'off'
   if toolchain == 'gcc':
     env = Environment(tools=['gcc'])
     # The gcc version should be available in env['CCVERSION'],
@@ -1004,7 +1007,7 @@ PLATFORM_OPTIONS = {
     'help': 'the os to build for'
   },
   'toolchain': {
-    'values': ['gcc', 'msvc'],
+    'values': ['gcc', 'msvc', 'crossmingw'],
     'guess': GuessToolchain,
     'help': 'the toolchain to use'
   }
@@ -1195,6 +1198,8 @@ def GetTools(opts):
   toolchain = env['toolchain']
   if os == 'win32' and toolchain == 'gcc':
     return ['mingw']
+  elif os == 'win32' and toolchain == 'crossmingw':
+    return ['crossmingw']
   elif os == 'win32' and toolchain == 'msvc':
     return ['msvc', 'mslink', 'mslib', 'msvs']
   else:
