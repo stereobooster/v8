@@ -9,7 +9,7 @@ selection method.
 """
 
 #
-# Copyright (c) 2001, 2002, 2003, 2004 The SCons Foundation
+# __COPYRIGHT__
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -31,7 +31,7 @@ selection method.
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
-__revision__ = "/home/scons/scons/branch.0/branch.96/baseline/src/engine/SCons/Tool/mingw.py 0.96.90.D001 2005/02/15 20:11:37 knight"
+__revision__ = "https://bitbucket.org/scons/scons/src/0a64d3bb987e/src/engine/SCons/Tool/mingw.py"
 
 import os
 import os.path
@@ -39,6 +39,7 @@ import string
 
 import SCons.Action
 import SCons.Builder
+import SCons.Defaults
 import SCons.Tool
 import SCons.Util
 
@@ -76,8 +77,10 @@ def shlib_generator(target, source, env, for_signature):
     implib = env.FindIxes(target, 'LIBPREFIX', 'LIBSUFFIX')
     if implib: cmd.append('-Wl,--out-implib,'+implib.get_string(for_signature))
 
-    def_target = env.FindIxes(target, 'WIN32DEFPREFIX', 'WIN32DEFSUFFIX')
-    if def_target: cmd.append('-Wl,--output-def,'+def_target.get_string(for_signature))
+    def_target = env.FindIxes(target, 'WINDOWSDEFPREFIX', 'WINDOWSDEFSUFFIX')
+    insert_def = env.subst("$WINDOWS_INSERT_DEF")
+    if not insert_def in ['', '0', 0] and def_target: \
+        cmd.append('-Wl,--output-def,'+def_target.get_string(for_signature))
 
     return [cmd]
 
@@ -86,27 +89,34 @@ def shlib_emitter(target, source, env):
     no_import_lib = env.get('no_import_lib', 0)
 
     if not dll:
-        raise SCons.Errors.UserError, "A shared library should have exactly one target with the suffix: %s" % env.subst("$SHLIBSUFFIX")
+        raise SCons.Errors.UserError("A shared library should have exactly one target with the suffix: %s" % env.subst("$SHLIBSUFFIX"))
     
     if not no_import_lib and \
        not env.FindIxes(target, 'LIBPREFIX', 'LIBSUFFIX'):
 
-        # Append an import library to the list of targets.
-        target.append(env.ReplaceIxes(dll,  
+        # Create list of target libraries as strings
+        targetStrings=env.ReplaceIxes(dll,  
                                       'SHLIBPREFIX', 'SHLIBSUFFIX',
-                                      'LIBPREFIX', 'LIBSUFFIX'))
+                                      'LIBPREFIX', 'LIBSUFFIX')
+        
+        # Now add file nodes to target list
+        target.append(env.fs.File(targetStrings))
 
     # Append a def file target if there isn't already a def file target
     # or a def file source. There is no option to disable def file
     # target emitting, because I can't figure out why someone would ever
     # want to turn it off.
-    def_source = env.FindIxes(source, 'WIN32DEFPREFIX', 'WIN32DEFSUFFIX')
-    def_target = env.FindIxes(target, 'WIN32DEFPREFIX', 'WIN32DEFSUFFIX')
+    def_source = env.FindIxes(source, 'WINDOWSDEFPREFIX', 'WINDOWSDEFSUFFIX')
+    def_target = env.FindIxes(target, 'WINDOWSDEFPREFIX', 'WINDOWSDEFSUFFIX')
     if not def_source and not def_target:
-        target.append(env.ReplaceIxes(dll,  
+        # Create list of target libraries and def files as strings
+        targetStrings=env.ReplaceIxes(dll,  
                                       'SHLIBPREFIX', 'SHLIBSUFFIX',
-                                      'WIN32DEFPREFIX', 'WIN32DEFSUFFIX'))
-    
+                                      'WINDOWSDEFPREFIX', 'WINDOWSDEFSUFFIX')
+        
+        # Now add file nodes to target list
+        target.append(env.fs.File(targetStrings))
+
     return (target, source)
                          
 
@@ -134,7 +144,7 @@ def generate(env):
         env['ENV']['PATH'] = string.join([dir] + path, os.pathsep)
 
     # Most of mingw is the same as gcc and friends...
-    gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas']
+    gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas', 'm4']
     for tool in gnu_tools:
         SCons.Tool.Tool(tool)(env)
 
@@ -145,6 +155,7 @@ def generate(env):
     env['SHCXXFLAGS'] = SCons.Util.CLVar('$CXXFLAGS')
     env['SHLINKFLAGS'] = SCons.Util.CLVar('$LINKFLAGS -shared')
     env['SHLINKCOM']   = shlib_action
+    env['LDMODULECOM'] = shlib_action
     env.Append(SHLIBEMITTER = [shlib_emitter])
     env['LINK'] = mingw_prefix + 'g++'
     env['AS'] = mingw_prefix + 'as'
@@ -152,12 +163,18 @@ def generate(env):
     env['RANLIB'] = mingw_prefix + 'ranlib'
     env['WIN32DEFPREFIX']        = ''
     env['WIN32DEFSUFFIX']        = '.def'
+    env['WINDOWSDEFPREFIX']      = '${WIN32DEFPREFIX}'
+    env['WINDOWSDEFSUFFIX']      = '${WIN32DEFSUFFIX}'
+
     env['SHOBJSUFFIX'] = '.o'
     env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = 1
 
     env['RC'] = mingw_prefix + 'windres'
     env['RCFLAGS'] = SCons.Util.CLVar('')
-    env['RCCOM'] = '$RC $_CPPDEFFLAGS $_CPPINCFLAGS ${INCPREFIX}${SOURCE.dir} $RCFLAGS -i $SOURCE -o $TARGET'
+    env['RCINCFLAGS'] = '$( ${_concat(RCINCPREFIX, CPPPATH, RCINCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)'
+    env['RCINCPREFIX'] = '--include-dir '
+    env['RCINCSUFFIX'] = ''
+    env['RCCOM'] = '$RC $_CPPDEFFLAGS $RCINCFLAGS ${RCINCPREFIX} ${SOURCE.dir} $RCFLAGS -i $SOURCE -o $TARGET'
     env['BUILDERS']['RES'] = res_builder
     
     # Some setting from the platform also have to be overridden:
@@ -169,8 +186,6 @@ def generate(env):
     env['SHOBJSUFFIX']    = '$OBJSUFFIX'
     env['PROGPREFIX']     = ''
     env['PROGSUFFIX']     = '.exe'
-    env['LIBPREFIX']      = ''
-    env['LIBSUFFIX']      = '.lib'
     env['SHLIBPREFIX']    = ''
     env['SHLIBSUFFIX']    = '.dll'
     env['LIBPREFIXES']    = [ '$LIBPREFIX' ]
@@ -178,3 +193,9 @@ def generate(env):
 
 def exists(env):
     return find(env)
+
+# Local Variables:
+# tab-width:4
+# indent-tabs-mode:nil
+# End:
+# vim: set expandtab tabstop=4 shiftwidth=4:

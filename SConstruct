@@ -982,6 +982,7 @@ def GuessStrictAliasing(env):
   # See http://code.google.com/p/v8/issues/detail?id=884
   # It can be worked around by disabling strict aliasing.
   toolchain = env['toolchain'];
+  # TODO check version for crossmingw same as gcc
   if toolchain == 'crossmingw':
     return 'off'
   if toolchain == 'gcc':
